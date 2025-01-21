@@ -1,2 +1,2 @@
-# ag-controller-sketch
-Скетч для контроллера а-галактик
+# ag-iot-sketches
+Скетчи для iot девайсов АГалактик
