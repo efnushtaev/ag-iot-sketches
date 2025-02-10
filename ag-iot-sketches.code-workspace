@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"name": "esp32-controller",
+			"path": "esp32-controller"
+		},
+		{
+			"name": "esp32-blink",
+			"path": "esp32-blink"
+		}
+	],
+	"settings": {}
+}
