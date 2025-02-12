@@ -5,8 +5,8 @@
 #include <PubSubClient.h>
 #include "config.h" // Include the config header file
 
-// Data wire is connected to GPIO 4
-#define ONE_WIRE_BUS 4
+// Data wire is connected to GPIO 35
+#define ONE_WIRE_BUS 35
 
 // MQTT broker details
 const char* mqtt_server = "dev.rightech.io";

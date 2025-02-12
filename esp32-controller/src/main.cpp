@@ -1,30 +1,28 @@
 #include <DHT.h>
 #include <WiFi.h>
 #include <PubSubClient.h>
+#include "config.h"
 
-#define SOIL_MOISTURE_PIN A0
-#define DHTPIN 4
 #define DHTTYPE DHT22
-#define RELAY_PIN 5
 
-DHT dht(DHTPIN, DHTTYPE);
+DHT dht(DHT11_DIGITAL_PIN, DHTTYPE);
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-const char* mqtt_server = "your_mqtt_server";
-const int mqtt_port = 1883;
-const char* mqtt_topic_temp = "sensor/temperature";
-const char* mqtt_topic_humidity = "sensor/humidity";
-const char* mqtt_topic_soil = "sensor/soil_moisture";
-const char* mqtt_topic_relay = "relay/control";
+const char* mqtt_server = MQTT_SERVER;
+const int mqtt_port = MQTT_PORT;
+const char* mqtt_topic_temp = MQTT_TOPIC_TEMP;
+const char* mqtt_topic_humidity = MQTT_TOPIC_HUMIDITY;
+const char* mqtt_topic_soil = MQTT_TOPIC_SOIL;
+const char* mqtt_topic_relay = MQTT_TOPIC_RELAY;
 
 void setup_wifi() {
   delay(10);
   Serial.println();
   Serial.print("Connecting to ");
-  Serial.println(ssid);
+  Serial.println(WIFI_SSID);
 
-  WiFi.begin(ssid, password);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -49,10 +47,10 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
   if (String(topic) == mqtt_topic_relay) {
     if (message == "ON") {
-      digitalWrite(RELAY_PIN, HIGH);
+      digitalWrite(RELAY_DIGITAL_PIN, HIGH);
       Serial.println("Relay is ON");
     } else if (message == "OFF") {
-      digitalWrite(RELAY_PIN, LOW);
+      digitalWrite(RELAY_DIGITAL_PIN, LOW);
       Serial.println("Relay is OFF");
     }
   }
@@ -76,8 +74,8 @@ void reconnect() {
 void setup() {
   Serial.begin(115200);
   dht.begin();
-  pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, LOW);
+  pinMode(RELAY_DIGITAL_PIN, OUTPUT);
+  digitalWrite(RELAY_DIGITAL_PIN, LOW);
 
   setup_wifi();
   client.setServer(mqtt_server, mqtt_port);
@@ -118,7 +116,7 @@ void loop() {
   client.publish(mqtt_topic_humidity, humidityString);
 
   // Read soil moisture
-  int soilMoistureValue = analogRead(SOIL_MOISTURE_PIN);
+  int soilMoistureValue = analogRead(FC28_ANALOG_PIN);
   Serial.print("Soil Moisture: ");
   Serial.println(soilMoistureValue);
 

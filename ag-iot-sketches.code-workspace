@@ -8,6 +8,10 @@
 			"name": "esp32-blink",
 			"path": "esp32-blink"
 		}
+		{
+			"name": "esp32-ds18b20",
+			"path": "esp32-ds18b20"
+		}
 	],
 	"settings": {}
 }
