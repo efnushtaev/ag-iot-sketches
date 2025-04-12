@@ -5,14 +5,6 @@
 			"path": "esp32-controller"
 		},
 		{
-			"name": "esp32-blink",
-			"path": "esp32-blink"
-		},
-		{
-			"name": "esp32-ds18b20",
-			"path": "esp32-ds18b20"
-		},
-		{
 			"name": "esp32-battery-check",
 			"path": "esp32-battery-check"
 		},
