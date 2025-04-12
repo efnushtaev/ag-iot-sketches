@@ -14,11 +14,13 @@
 void setup()
 {
   // initialize LED digital pin as an output.
+    Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
 }
 
 void loop()
 {
+  Serial.print("blink");
   // turn the LED on (HIGH is the voltage level)
   digitalWrite(LED_BUILTIN, HIGH);
   // wait for a second

@@ -7,11 +7,23 @@
 		{
 			"name": "esp32-blink",
 			"path": "esp32-blink"
-		}
+		},
 		{
 			"name": "esp32-ds18b20",
 			"path": "esp32-ds18b20"
-		}
+		},
+		{
+			"name": "esp32-battery-check",
+			"path": "esp32-battery-check"
+		},
+		{
+			"name": "esp32-node-dht22",
+			"path": "esp32-node-dht22"
+		},
 	],
-	"settings": {}
+	"settings": {
+		"files.associations": {
+			"algorithm": "cpp"
+		}
+	}
 }

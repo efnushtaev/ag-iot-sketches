@@ -2,8 +2,8 @@
 #define CONFIG_H
 
 // Need add your wifi ssid, password and clientId here
-#define WIFI_SSID_2_4 "TP-Link_B354"
-#define WIFI_PASSWORD "57339016"
+#define WIFI_SSID "TP-Link_B354"
+#define WIFI_PASS "57339016"
 #define CLIENT_ID "mqtt-efnushtaev-zue8fh"
 #define MQTT_SERVER "dev.rightech.io"
 #define MQTT_PORT 1883

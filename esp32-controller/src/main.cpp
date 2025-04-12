@@ -1,68 +1,145 @@
-#include <DHT.h>
+// ----------------------------------------------------------------------------
+// --- ESP32 GATEWAY ESP-NOW + MQTT
+// ----------------------------------------------------------------------------
+
+#include <Arduino.h>
 #include <WiFi.h>
+#include <esp_now.h>
 #include <PubSubClient.h>
 #include "config.h"
 
-#define DHTTYPE DHT22
+TaskHandle_t espNowTaskHandle;
+TaskHandle_t mqttTaskHandle;
 
-DHT dht(DHT11_DIGITAL_PIN, DHTTYPE);
+// ----------------------------------------------------------------------------
+// WiFi
+// ----------------------------------------------------------------------------
+
+void initWiFi()
+{
+  WiFi.mode(WIFI_MODE_APSTA);
+  WiFi.begin(WIFI_SSID_2_4, WIFI_PASSWORD);
+
+  Serial.printf("Connecting to %s .", WIFI_SSID_2_4);
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    Serial.print(".");
+    delay(200);
+  }
+  Serial.println(" ok");
+
+  IPAddress ip = WiFi.localIP();
+
+  Serial.printf("SSID: %s\n", WIFI_SSID_2_4);
+  Serial.printf("Channel: %u\n", WiFi.channel());
+  Serial.printf("IP: %u.%u.%u.%u\n", ip & 0xff, (ip >> 8) & 0xff, (ip >> 16) & 0xff, ip >> 24);
+}
+
+// ----------------------------------------------------------------------------
+// ESP-NOW
+// ----------------------------------------------------------------------------
+
+typedef struct struct_message
+{
+  float temperature;
+  float humidity;
+  unsigned long timestamp;
+} struct_message;
+
+struct_message myData;
+
+void onDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len)
+{
+  Serial.print("Получено данных от: ");
+  for (int i = 0; i < 6; i++)
+  {
+    Serial.printf("%02X", mac[i]);
+    if (i < 5)
+      Serial.print(":");
+  }
+  Serial.println();
+
+  if (len == sizeof(myData))
+  {
+    memcpy(&myData, incomingData, sizeof(myData));
+
+    Serial.print("Получено данных: ");
+    Serial.println(len);
+    Serial.print("TIME: ");
+    Serial.println(myData.timestamp);
+    Serial.print("TEMP: ");
+    Serial.println(myData.temperature);
+    Serial.print("HUMI: ");
+    Serial.println(myData.humidity);
+    Serial.println();
+  }
+  else
+  {
+    Serial.println("Ошибка: полученные данные имеют неправильный размер");
+  }
+}
+
+void espNowTask(void *pvParameters)
+{
+  while (true)
+  {
+    // Основной цикл не требуется, данные обрабатываются в callback
+    vTaskDelay(200 / portTICK_PERIOD_MS);
+  }
+}
+
+void initEspNow()
+{
+  if (esp_now_init() != ESP_OK)
+  {
+    Serial.println("ESP NOW failed to initialize");
+    while (1)
+      ;
+  }
+
+  esp_now_register_recv_cb(onDataRecv);
+  xTaskCreatePinnedToCore(espNowTask, "ESP-NOW Task", 4096, NULL, 1, &espNowTaskHandle, 0);
+}
+
+// ----------------------------------------------------------------------------
+// MQTT
+// ----------------------------------------------------------------------------
+
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-const char* mqtt_server = MQTT_SERVER;
+const char *mqtt_server = MQTT_SERVER;
 const int mqtt_port = MQTT_PORT;
-const char* mqtt_topic_temp = MQTT_TOPIC_TEMP;
-const char* mqtt_topic_humidity = MQTT_TOPIC_HUMIDITY;
-const char* mqtt_topic_soil = MQTT_TOPIC_SOIL;
-const char* mqtt_topic_relay = MQTT_TOPIC_RELAY;
+const char *mqtt_topic_time = MQTT_TOPIC_STATUS_ESP;
+const char *mqtt_topic_temp = MQTT_TOPIC_TEMP;
+const char *mqtt_topic_humi = MQTT_TOPIC_HUMIDITY;
+const char *mqtt_client = CLIENT_ID;
 
-void setup_wifi() {
-  delay(10);
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(WIFI_SSID);
+enum PublishType
+{
+  TEMP,
+  HUMI,
+  SOIL,
+  BATT,
+  TIME
+};
 
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+PublishType nextPublish = TIME;
 
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
+const unsigned long interval = 20000; // Интервал публикации в миллисекундах
+unsigned long lastMillisPublish = 0;
 
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
-}
-
-void callback(char* topic, byte* payload, unsigned int length) {
-  String message;
-  for (unsigned int i = 0; i < length; i++) {
-    message += (char)payload[i];
-  }
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("] ");
-  Serial.println(message);
-
-  if (String(topic) == mqtt_topic_relay) {
-    if (message == "ON") {
-      digitalWrite(RELAY_DIGITAL_PIN, HIGH);
-      Serial.println("Relay is ON");
-    } else if (message == "OFF") {
-      digitalWrite(RELAY_DIGITAL_PIN, LOW);
-      Serial.println("Relay is OFF");
-    }
-  }
-}
-
-void reconnect() {
-  while (!client.connected()) {
+void reconnect()
+{
+  while (!client.connected())
+  {
     Serial.print("Attempting MQTT connection...");
-    if (client.connect("ESP32Client")) {
+    if (client.connect(mqtt_client))
+    {
       Serial.println("connected");
-      client.subscribe(mqtt_topic_relay);
-    } else {
+    }
+    else
+    {
       Serial.print("failed, rc=");
       Serial.print(client.state());
       Serial.println(" try again in 5 seconds");
@@ -71,60 +148,86 @@ void reconnect() {
   }
 }
 
-void setup() {
-  Serial.begin(115200);
-  dht.begin();
-  pinMode(RELAY_DIGITAL_PIN, OUTPUT);
-  digitalWrite(RELAY_DIGITAL_PIN, LOW);
+void mqttTask(void *pvParameters)
+{
+  while (true)
+  {
+    if (!client.connected())
+    {
+      reconnect();
+    }
 
-  setup_wifi();
+    client.loop();
+
+    unsigned long currentMillis = millis();
+
+    if (currentMillis - lastMillisPublish >= interval && nextPublish == TIME)
+    {
+      lastMillisPublish = currentMillis;
+
+      char msg[50];
+      snprintf(msg, sizeof(msg), "%lu", myData.timestamp);
+      client.publish(mqtt_topic_time, msg);
+
+      Serial.print("Timestamp to MQTT: ");
+      Serial.println(msg);
+      Serial.println('\n');
+
+      nextPublish = TEMP;
+    };
+
+    if (currentMillis - lastMillisPublish >= interval && nextPublish == TEMP)
+    {
+      lastMillisPublish = currentMillis;
+
+      char msg[50];
+      snprintf(msg, sizeof(msg), "%.2f", myData.temperature);
+      client.publish(mqtt_topic_temp, msg);
+
+      Serial.print("Temperature to MQTT: ");
+      Serial.println(msg);
+      Serial.println('\n');
+
+      nextPublish = HUMI;
+    };
+
+    if (currentMillis - lastMillisPublish >= interval && nextPublish == HUMI)
+    {
+      lastMillisPublish = currentMillis;
+
+      char msg[50];
+      snprintf(msg, sizeof(msg), "%.2f", myData.humidity);
+      client.publish(mqtt_topic_humi, msg);
+
+      Serial.print("Humidity to MQTT: ");
+      Serial.println(msg);
+      Serial.println('\n');
+
+      nextPublish = TIME;
+    };
+
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+  }
+}
+
+void initMqtt()
+{
   client.setServer(mqtt_server, mqtt_port);
-  client.setCallback(callback);
+  xTaskCreatePinnedToCore(mqttTask, "MQTT Task", 4096, NULL, 1, &mqttTaskHandle, 1);
 }
 
-void loop() {
-  if (!client.connected()) {
-    reconnect();
-  }
-  client.loop();
+// ----------------------------------------------------------------------------
+// INIT + LOOP
+// ----------------------------------------------------------------------------
 
-  // Read temperature and humidity from DHT22
-  float temperature = dht.readTemperature();
-  float humidity = dht.readHumidity();
+void setup()
+{
+  Serial.begin(115200);
+  delay(500);
 
-  // Check if any reads failed and exit early (to try again).
-  if (isnan(temperature) || isnan(humidity)) {
-    Serial.println("Failed to read from DHT sensor!");
-    return;
-  }
-
-  // Print temperature and humidity to Serial Monitor
-  Serial.print("Temperature: ");
-  Serial.print(temperature);
-  Serial.println(" °C");
-  Serial.print("Humidity: ");
-  Serial.print(humidity);
-  Serial.println(" %");
-
-  // Publish temperature and humidity to MQTT
-  char tempString[8];
-  dtostrf(temperature, 1, 2, tempString);
-  client.publish(mqtt_topic_temp, tempString);
-
-  char humidityString[8];
-  dtostrf(humidity, 1, 2, humidityString);
-  client.publish(mqtt_topic_humidity, humidityString);
-
-  // Read soil moisture
-  int soilMoistureValue = analogRead(FC28_ANALOG_PIN);
-  Serial.print("Soil Moisture: ");
-  Serial.println(soilMoistureValue);
-
-  // Publish soil moisture to MQTT
-  char soilString[8];
-  itoa(soilMoistureValue, soilString, 10);
-  client.publish(mqtt_topic_soil, soilString);
-
-  // Wait 10 seconds before repeating
-  delay(10000);
+  initWiFi();
+  initEspNow();
+  initMqtt();
 }
+
+void loop() {}
