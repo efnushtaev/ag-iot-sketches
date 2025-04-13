@@ -12,6 +12,10 @@
 			"name": "esp32-node-dht22",
 			"path": "esp32-node-dht22"
 		},
+		{
+			"name": "esp32-node-template",
+			"path": "esp32-node-template"
+		}
 	],
 	"settings": {
 		"files.associations": {
