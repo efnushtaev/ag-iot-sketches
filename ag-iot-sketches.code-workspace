@@ -9,8 +9,8 @@
 			"path": "esp32-battery-check"
 		},
 		{
-			"name": "esp32-node-dht22",
-			"path": "esp32-node-dht22"
+			"name": "esp32-node-1",
+			"path": "esp32-node-1"
 		},
 		{
 			"name": "esp32-node-template",

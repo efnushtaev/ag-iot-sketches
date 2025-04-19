@@ -1,155 +1,77 @@
 // #include <WiFi.h>
 // #include <esp_now.h>
-// #include <esp_wifi.h>
 // #include <DHT.h>
 
-// #define DHTPIN 4
+// #define DHTPIN 4 // Пин, к которому подключен DHT22
 // #define DHTTYPE DHT22
 
 // DHT dht(DHTPIN, DHTTYPE);
 
-// // Структура данных для отправки
-// typedef struct struct_message {
-//   float temperature;
-//   float humidity;
-//   unsigned long timestamp;
+// const int BATTERY_PIN = 34; // Пин для измерения напряжения на аккумуляторе
+
+// const float R1 = 100000.0;        // Резистор R1 (100k)
+// const float R2 = 220000.0;        // Резистор R2 (220k)
+// const float VREF = 3.3;           // Опорное напряжение
+// const float CALIBRATION = 1.1;    // Калибровочный коэффициент
+// #define SAMPLES 10       // Количество образцов
+// #define SAMPLE_DELAY 20  // Задержка между замерами (мс)
+// #define SLEEP_MINUTES 1  // Интервал сна
+
+// // Замените на MAC-адрес вашего приемника
+// uint8_t receiverMac[] = {0x3C, 0xE9, 0x0E, 0x8C, 0xF5, 0xD8};
+
+// // Структура данных (должна совпадать на передатчике и приемнике)
+// typedef struct __attribute__((packed)) struct_message {
+//     float temperature;
+//     float humidity;
+//     float battery;
 // } struct_message;
 
-// // MAC-адрес приемника
-// uint8_t receiverMac[] = {0x3C, 0xE9, 0x0E, 0x8C, 0xF5, 0xD8}; // Замените на MAC приемника
+// struct_message myData;
 
-// constexpr char WIFI_SSID[] = "TP-Link_B354";
-
-// void restart()
-// {
-//   Serial.println("Restart ESP...");
-//   ESP.restart();
-// }
-
-// // Callback при отправке данных
+// // Callback-функция после отправки данных
 // void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-//   static int count;
-//   if (status == ESP_NOW_SEND_SUCCESS)
-//   {
-//     Serial.println("Delivery success");
-//     count = 0;
-//   }
-//   else
-//   {
-//     Serial.print("Delivery fail  ");
-//     count++;
-//     if (count > 10)
-//     {
-//       restart();
+//     Serial.print("Статус отправки: ");
+//     Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Успешно" : "Ошибка");
+//     if (status != ESP_NOW_SEND_SUCCESS) {
+//         Serial.print("Ошибка отправки: ");
+//         Serial.println(status);
 //     }
-//     Serial.println(count);
-//   }
 // }
 
-// // Глобальные массивы для замеров
-// float tempReadings[10];
-// float humReadings[10];
+// // Функция для медианной фильтрации
+// float read_filtered_voltage() {
+//     int samples[SAMPLES];
 
-// int32_t getWiFiChannel(const char *ssid)
-// {
-//   if (int32_t n = WiFi.scanNetworks())
-//   {
-//     for (uint8_t i = 0; i < n; i++)
-//     {
-//       if (!strcmp(ssid, WiFi.SSID(i).c_str()))
-//       {
-//         memcpy(&receiverMac, WiFi.BSSID(i), 6);
-//         return WiFi.channel(i);
-//       }
+//     // Сбор образцов
+//     for(int i=0; i<SAMPLES; i++) {
+//         samples[i] = analogRead(BATTERY_PIN);
+//         delay(SAMPLE_DELAY);
 //     }
-//   }
-//   return 0;
-// }
-
-// bool read_dht_data(float &avgTemp, float &avgHum) {
-//   for (int i = 0; i < 10; i++) {
-//     float t = dht.readTemperature();
-//     float h = dht.readHumidity();
-
-//     if (isnan(t) || isnan(h)) {
-//       Serial.println("DHT Read Failed!");
-//       return false;
+  
+//     // Сортировка и усреднение центральных значений
+//     std::sort(samples, samples+SAMPLES);
+//     long sum = 0;
+//     for(int i=2; i<SAMPLES-2; i++) { // Отбрасываем 2 мин и 2 макс
+//         sum += samples[i];
 //     }
 
-//     tempReadings[i] = t;
-//     humReadings[i] = h;
-//     delay(200); // Задержка между измерениями
-//   }
-
-//   // Сортировка массивов
-//   std::sort(tempReadings, tempReadings + 10);
-//   std::sort(humReadings, humReadings + 10);
-
-//   float tempSum = 0, humSum = 0;
-//   for (int i = 2; i < 8; i++) { // Используем только центральные 6 значений
-//     tempSum += tempReadings[i];
-//     humSum += humReadings[i];
-//   }
-
-//   avgTemp = tempSum / 6;
-//   avgHum = humSum / 6;
-
-//   return true;
+//     return (sum * VREF) / ((SAMPLES-4) * 4095.0); // Изменено на 4095 для ESP32
 // }
 
 // void setup() {
-//   Serial.begin(115200);
-//   dht.begin();
-//   WiFi.mode(WIFI_STA);
-
-//   // Инициализация ESP-NOW
-//   if (esp_now_init() != ESP_OK) {
-//     Serial.println("Error initializing ESP-NOW");
-//     return;
-//   }
-
-//   // Установка Wi-Fi канала
-//   int32_t channel = getWiFiChannel(WIFI_SSID);
-
-//   esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
-
-//   // Регистрация callback
-//   esp_now_register_send_cb(OnDataSent);
-
-//   // Добавление пира
-//   esp_now_peer_info_t peerInfo = {};
-//   memcpy(peerInfo.peer_addr, receiverMac, 6);
-//   Serial.println("channel: " + String(channel));
-//   peerInfo.channel = channel;
-//   peerInfo.encrypt = false;
-
-//   if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-//     Serial.println("Failed to add peer");
-//     return;
-//   }
-// }
-
-// void loop() {
-//   struct_message myData;
-//   myData.timestamp = millis(); // Текущее время в мс
-
-//   // Выполнение замеров с DHT-22
-//   if (read_dht_data(myData.temperature, myData.humidity)) {
-//     Serial.print("Средняя температура: ");
-//     Serial.println(myData.temperature);
-//     Serial.print("Средняя влажность: ");
-//     Serial.println(myData.humidity);
-
-//     // Отправка данных
-//     esp_err_t result = esp_now_send(receiverMac, (uint8_t *)&myData, sizeof(myData));
-//     if (result == ESP_OK) {
-//       Serial.println("Данные успешно отправлены");
-//     } else {
-//       Serial.println("Ошибка отправки данных");
+//     Serial.begin(115200);
+//     Serial.println("Инициализация датчика DHT...");
+//     dht.begin();
+//     Serial.println("Инициализация завершена.");
+//     WiFi.mode(WIFI_STA); // Режим станции
+    
+//     // Инициализация ESP-NOW
+//     if (esp_now_init() != ESP_OK) {
+//         Serial.println("Ошибка инициализации ESP-NOW");
+//         return;
 //     }
-//   } else {
-//     Serial.println("Ошибка чтения данных с DHT-22");
-//   }
-
-//   delay(2000); // Отправка каждые 10 секунд
-// }
+//     Serial.println("ESP-NOW инициализирован");
+    
+//     // Регистрация callback для отслеживания статуса отправки
+//     esp_now_register_send_cb(OnDataSent

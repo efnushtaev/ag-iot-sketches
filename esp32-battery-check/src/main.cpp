@@ -54,6 +54,7 @@ typedef struct struct_message
 {
     float temperature;
     float humidity;
+    float humidity;
     unsigned long timestamp;
 } struct_message;
 

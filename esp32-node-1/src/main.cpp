@@ -9,10 +9,13 @@
 #include <DHT.h>
 #include "config.h"
 
-#define DHTPIN 4
 #define DHTTYPE DHT22
+#define SOIL_SENSOR_POWER_PIN 5 // Пин для управления питанием датчика
+#define SOIL_SENSOR_DATA_PIN 34 // Пин для считывания данных с датчика
+#define SOIL_SENSOR_MIN 300  // Минимальное значение (сухая почва)
+#define SOIL_SENSOR_MAX 1023 // Максимальное значение (влажная почва)
 
-DHT dht(DHTPIN, DHTTYPE);
+DHT dht(DHT22_D_PIN, DHTTYPE);
 
 // ----------------------------------------------------------------------------
 // WiFi
@@ -53,6 +56,7 @@ typedef struct struct_message
 {
     float temperature;
     float humidity;
+    float soil;
     unsigned long timestamp;
 } struct_message;
 
@@ -157,6 +161,52 @@ void initDHT()
         Serial.println("Ошибка чтения данных с DHT-22");
     }
 }
+
+// ----------------------------------------------------------------------------
+// SOIL
+// ----------------------------------------------------------------------------
+
+void initSoilSensor()
+{
+    pinMode(SOIL_SENSOR_POWER_PIN, OUTPUT);
+    digitalWrite(SOIL_SENSOR_POWER_PIN, HIGH); // Включить питание датчика
+    delay(500); // Задержка для стабилизации датчика
+
+    int soilReadings[10];
+
+    // Считывание 10 замеров с интервалом 200 мс
+    for (int i = 0; i < 10; i++)
+    {
+        soilReadings[i] = analogRead(SOIL_SENSOR_DATA_PIN);
+        delay(200);
+    }
+
+    // Отключение питания датчика
+    digitalWrite(SOIL_SENSOR_POWER_PIN, LOW);
+
+    // Сортировка массива замеров
+    std::sort(soilReadings, soilReadings + 10);
+
+    // Вычисление среднего значения без экстремумов
+    int soilSum = 0;
+    for (int i = 2; i < 8; i++) // Используем только центральные 6 значений
+    {
+        soilSum += soilReadings[i];
+    }
+
+    float avgSoil = soilSum / 6.0; // Среднее значение
+
+        // Преобразование в проценты
+        float soilPercent = 100.0 * (SOIL_SENSOR_MAX - avgSoil) / (SOIL_SENSOR_MAX - SOIL_SENSOR_MIN);
+        soilPercent = constrain(soilPercent, 0, 100); // Ограничиваем значение от 0 до 100
+
+    // Запись среднего значения в myData.soil
+    myData.soil = avgSoil;
+
+    Serial.print("Средняя влажность почвы: ");
+    Serial.println(myData.soil);
+}
+
 // ----------------------------------------------------------------------------
 // INIT + LOOP
 // ----------------------------------------------------------------------------
@@ -169,15 +219,22 @@ void setup()
     initEspNow();
 }
 
-uint32_t last;
-const unsigned long interval = 5000;
+uint32_t lastTimeDHT;
+uint32_t lastTimeSoil;
 
 void loop()
 {
-    if (millis() - last > interval)
+    if (millis() - lastTimeDHT > DHT_INTERVAL_TIMEOUT)
     {
         myData.timestamp = millis();
         initDHT();
-        last = millis();
+        lastTimeDHT = millis();
+    }
+
+    if (millis() - lastTimeSoil > SOIL_INTERVAL_TIMEOUT)
+    {
+        myData.timestamp = millis();
+        initSoilSensor();
+        lastTimeSoil = millis();
     }
 }

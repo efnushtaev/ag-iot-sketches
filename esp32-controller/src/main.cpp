@@ -43,6 +43,7 @@ typedef struct struct_message
 {
   float temperature;
   float humidity;
+  float soil;
   unsigned long timestamp;
 } struct_message;
 
@@ -161,6 +162,10 @@ void mqttTask(void *pvParameters)
 
     unsigned long currentMillis = millis();
 
+    // --------------------------------------------------------------------------------------------
+    // TIME
+    // --------------------------------------------------------------------------------------------
+
     if (currentMillis - lastMillisPublish >= interval && nextPublish == TIME)
     {
       lastMillisPublish = currentMillis;
@@ -175,6 +180,10 @@ void mqttTask(void *pvParameters)
 
       nextPublish = TEMP;
     };
+
+    // --------------------------------------------------------------------------------------------
+    // TEMP
+    // --------------------------------------------------------------------------------------------
 
     if (currentMillis - lastMillisPublish >= interval && nextPublish == TEMP)
     {
@@ -191,6 +200,10 @@ void mqttTask(void *pvParameters)
       nextPublish = HUMI;
     };
 
+    // --------------------------------------------------------------------------------------------
+    // HUMI
+    // --------------------------------------------------------------------------------------------
+
     if (currentMillis - lastMillisPublish >= interval && nextPublish == HUMI)
     {
       lastMillisPublish = currentMillis;
@@ -200,6 +213,25 @@ void mqttTask(void *pvParameters)
       client.publish(mqtt_topic_humi, msg);
 
       Serial.print("Humidity to MQTT: ");
+      Serial.println(msg);
+      Serial.println('\n');
+
+      nextPublish = SOIL;
+    };
+
+    // --------------------------------------------------------------------------------------------
+    // SOIL
+    // --------------------------------------------------------------------------------------------
+
+    if (currentMillis - lastMillisPublish >= interval && nextPublish == SOIL)
+    {
+      lastMillisPublish = currentMillis;
+
+      char msg[50];
+      snprintf(msg, sizeof(msg), "%.0f%%", myData.soil); // Округление до ближайшего целого
+      client.publish(mqtt_topic_humi, msg);
+
+      Serial.print("Soil to MQTT: ");
       Serial.println(msg);
       Serial.println('\n');
 
